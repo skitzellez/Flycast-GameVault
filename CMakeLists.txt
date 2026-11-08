@@ -163,6 +163,10 @@ if(WINDOWS_STORE)
 	elseif(VERSION_PARTS_LENGTH EQUAL 3)
 		string(APPEND MS_VERSION ".0")
 	endif()
+	# Flycast for Game Vault: its own package version (-DGV_VERSION=0.1.0.x)
+	if(GV_VERSION)
+		set(MS_VERSION ${GV_VERSION})
+	endif()
 endif()
 
 string(TIMESTAMP BUILD_TIMESTAMP UTC)
@@ -1070,6 +1074,7 @@ target_sources(${PROJECT_NAME} PRIVATE
 		core/serialize.h
 		core/stbi.h
 		core/stdclass.cpp
+		core/gv_prof.cpp
 		core/stdclass.h
 		core/types.h
 		core/debug/gdb_server.h)

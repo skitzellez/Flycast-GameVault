@@ -48,6 +48,7 @@
  * 09000000 - ?         elan command buffer
  * 0A000000 - 0bfffffff elan RAM
  */
+#include "gv_prof.h"
 #include "elan.h"
 #include "hw/mem/addrspace.h"
 #include "pvr_mem.h"
@@ -1746,6 +1747,7 @@ static void DYNACALL write_elancmd(u32 addr, u32 data)
 
 	if (addr == 7)
 	{
+		gvprof::Scope gvp(gvprof::Elan);
 		try {
 			if (!ggpo::rollbacking())
 				executeCommand<true>((u8 *)elanCmd, sizeof(elanCmd));

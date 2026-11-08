@@ -16,6 +16,7 @@
     You should have received a copy of the GNU General Public License
     along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
 */
+#include "gv_prof.h"
 #include "dx11_renderer.h"
 #include "dx11context.h"
 #include "hw/pvr/ta.h"
@@ -603,19 +604,25 @@ void DX11Renderer::setCullMode(int mode)
 		rasterizer = rasterCullBack;
 		break;
 	}
-	deviceContext->RSSetState(rasterizer);
+	if (gvState.raster != rasterizer.get())
+	{
+		gvState.raster = rasterizer.get();
+		deviceContext->RSSetState(rasterizer);
+	}
 }
 
 TileClipping DX11Renderer::setTileClip(u32 tileclip, Rect& clip_rect)
 {
 	TileClipping clipmode = matrices.getTileClip(tileclip, clip_rect);
-	if (clipmode == TileClipping::Outside) {
-		RECT rect { clip_rect.origin.x, clip_rect.origin.y,
+	RECT rect = scissorRect;
+	if (clipmode == TileClipping::Outside)
+		rect = { clip_rect.origin.x, clip_rect.origin.y,
 			clip_rect.origin.x + clip_rect.size.x, clip_rect.origin.y + clip_rect.size.y };
+	if (!gvState.scissorSet || memcmp(&gvState.scissor, &rect, sizeof(rect)) != 0)
+	{
+		gvState.scissor = rect;
+		gvState.scissorSet = true;
 		deviceContext->RSSetScissorRects(1, &rect);
-	}
-	else {
-		deviceContext->RSSetScissorRects(1, &scissorRect);
 	}
 	return clipmode;
 }
@@ -651,7 +658,11 @@ void DX11Renderer::setRenderState(const PolyParam *gp)
 	}
 
 	ComPtr<ID3D11VertexShader> vertexShader = shaders->getVertexShader(gp->pcw.Gouraud, gp->isNaomi2());
-	deviceContext->VSSetShader(vertexShader, nullptr, 0);
+	if (gvState.vs != vertexShader.get())
+	{
+		gvState.vs = vertexShader.get();
+		deviceContext->VSSetShader(vertexShader, nullptr, 0);
+	}
 	ComPtr<ID3D11PixelShader> pixelShader = shaders->getShader(
 			gp->pcw.Texture,
 			gp->tsp.UseAlpha,
@@ -667,7 +678,11 @@ void DX11Renderer::setRenderState(const PolyParam *gp)
 			Type == ListType_Punch_Through,
 			clipmode == TileClipping::Inside,
 			dithering);
-	deviceContext->PSSetShader(pixelShader, nullptr, 0);
+	if (gvState.ps != pixelShader.get())
+	{
+		gvState.ps = pixelShader.get();
+		deviceContext->PSSetShader(pixelShader, nullptr, 0);
+	}
 
 	if (gpuPalette != 0)
 	{
@@ -694,7 +709,11 @@ void DX11Renderer::setRenderState(const PolyParam *gp)
 
 	if (texture != nullptr)
 	{
-        deviceContext->PSSetShaderResources(0, 1, &texture->textureView.get());
+		if (gvState.srv != texture->textureView.get())
+		{
+			gvState.srv = texture->textureView.get();
+			deviceContext->PSSetShaderResources(0, 1, &texture->textureView.get());
+		}
 		bool linearFiltering;
 		if (gpuPalette != 0)
 			linearFiltering = false;
@@ -705,11 +724,22 @@ void DX11Renderer::setRenderState(const PolyParam *gp)
 		else
 			linearFiltering = true;
         auto sampler = samplers->getSampler(linearFiltering, gp->tsp.ClampU, gp->tsp.ClampV, gp->tsp.FlipU, gp->tsp.FlipV, Type == ListType_Punch_Through);
-        deviceContext->PSSetSamplers(0, 1, &sampler.get());
+		if (gvState.sampler != sampler.get())
+		{
+			gvState.sampler = sampler.get();
+			deviceContext->PSSetSamplers(0, 1, &sampler.get());
+		}
 	}
 
 	// Apparently punch-through polys support blending, or at least some combinations
-	deviceContext->OMSetBlendState(blendStates.getState(true, gp->tsp.SrcInstr, gp->tsp.DstInstr), nullptr, 0xffffffff);
+	{
+		auto blend = blendStates.getState(true, gp->tsp.SrcInstr, gp->tsp.DstInstr);
+		if (gvState.blend != blend.get())
+		{
+			gvState.blend = blend.get();
+			deviceContext->OMSetBlendState(blend, nullptr, 0xffffffff);
+		}
+	}
 
 	setCullMode(gp->isp.CullMode);
 
@@ -733,7 +763,15 @@ void DX11Renderer::setRenderState(const PolyParam *gp)
 			zwriteEnable = !gp->isp.ZWriteDis;
 	}
 	const u32 stencil = (gp->pcw.Shadow != 0) ? 0x80 : 0;
-	deviceContext->OMSetDepthStencilState(depthStencilStates.getState(true, zwriteEnable, zfunc, config::ModifierVolumes), stencil);
+	{
+		auto dss = depthStencilStates.getState(true, zwriteEnable, zfunc, config::ModifierVolumes);
+		if (gvState.dss != dss.get() || gvState.stencil != stencil)
+		{
+			gvState.dss = dss.get();
+			gvState.stencil = stencil;
+			deviceContext->OMSetDepthStencilState(dss, stencil);
+		}
+	}
 
 	if (gp->isNaomi2())
 		n2Helper.setConstants(*gp, 0, *rendContext); // poly number only used in OIT
@@ -745,6 +783,7 @@ void DX11Renderer::drawList(const std::vector<PolyParam>& gply, int first, int c
 	if (count == 0)
 		return;
 	deviceContext->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+	gvStateReset();
 
 	const PolyParam* params = &gply[first];
 
@@ -759,6 +798,7 @@ void DX11Renderer::drawList(const std::vector<PolyParam>& gply, int first, int c
 				continue;
 			}
 			setRenderState<Type, SortingEnabled>(params);
+			gvprof::draws++;
 			deviceContext->DrawIndexed(params->count, params->first, 0);
 		}
 
@@ -771,6 +811,7 @@ void DX11Renderer::drawSorted(int first, int count, bool multipass)
 	if (count == 0)
 		return;
 	deviceContext->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	gvStateReset();
 	int end = first + count;
 	for (int p = first; p < end; p++)
 	{
@@ -820,6 +861,7 @@ void DX11Renderer::drawSorted(int first, int count, bool multipass)
 
 void DX11Renderer::drawModVols(int first, int count)
 {
+	gvStateReset();
 	if (count == 0 || rendContext->modtrig.empty() || !config::ModifierVolumes)
 		return;
 

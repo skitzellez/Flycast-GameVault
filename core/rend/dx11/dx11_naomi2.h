@@ -21,6 +21,7 @@
 #include <d3d11.h>
 #include "windows/comptr.h"
 #include "hw/pvr/ta_ctx.h"
+#include <cstring>
 
 extern const char * const DX11N2VertexShader;
 extern const char * const DX11N2ColorShader;
@@ -42,6 +43,7 @@ public:
 
 	void resetCache() {
 		lastModel = -1;
+		lastPolyValid = false;
 	}
 
 private:
@@ -58,4 +60,17 @@ private:
 	ComPtr<ID3D11Buffer> polyConstantsBuffer;
 	ComPtr<ID3D11Buffer> lightConstantsBuffer;
 	int lastModel;
+	// Game Vault: the per-polygon constants last sent
+	unsigned char lastPoly[240];
+	bool lastPolyValid = false;
+	template<typename T>
+	bool changed(const T& data)
+	{
+		static_assert(sizeof(T) <= sizeof(lastPoly), "lastPoly too small");
+		if (lastPolyValid && memcmp(lastPoly, &data, sizeof(T)) == 0)
+			return false;
+		memcpy(lastPoly, &data, sizeof(T));
+		lastPolyValid = true;
+		return true;
+	}
 };

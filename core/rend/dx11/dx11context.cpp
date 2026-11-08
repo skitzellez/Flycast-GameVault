@@ -16,6 +16,7 @@
     You should have received a copy of the GNU General Public License
     along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
 */
+#include "gv_prof.h"
 #include "dx11context.h"
 #ifndef LIBRETRO
 #include "rend/osd.h"
@@ -240,9 +241,14 @@ void DX11Context::Present()
 	}
 	else if (swapOnVSync) {
 		int swapInterval = std::clamp((int)(settings.display.refreshRate / 60.f * gameSwapInterval), 1, 4);
+		gvprof::swapInterval = swapInterval;
+		gvprof::refreshRate = (int)settings.display.refreshRate;
+		gvprof::Scope gvp(gvprof::Swap);
 		hr = swapchain->Present(swapInterval, 0);
 	}
 	else {
+		gvprof::swapInterval = 0;
+		gvprof::Scope gvp(gvprof::Swap);
 		hr = swapchain->Present(0, allowTearing ? DXGI_PRESENT_ALLOW_TEARING : DXGI_PRESENT_DO_NOT_WAIT);
 	}
 	if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {

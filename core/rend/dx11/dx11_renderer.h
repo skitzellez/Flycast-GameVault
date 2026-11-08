@@ -98,6 +98,14 @@ protected:
 	void readRttRenderTarget(u32 texAddress);
 	void displayFramebuffer();
 	void setCullMode(int mode);
+	// Game Vault: the render state last sent inside one draw list, cleared at the start of each list (gvStateReset)
+	struct GvStateCache {
+		void *vs = nullptr, *ps = nullptr, *srv = nullptr, *sampler = nullptr, *blend = nullptr, *raster = nullptr, *dss = nullptr;
+		UINT stencil = ~0u;
+		RECT scissor{};
+		bool scissorSet = false;
+	} gvState;
+	void gvStateReset() { gvState = GvStateCache(); }
 	virtual void setRTTSize(int width, int height) {}
 	void writeFramebufferToVRAM();
 	void renderVideoRouting();

@@ -191,7 +191,17 @@ public:
 		map_button(SDL_CONTROLLER_BUTTON_DPAD_LEFT, DC_DPAD_LEFT);
 		map_button(SDL_CONTROLLER_BUTTON_DPAD_RIGHT, DC_DPAD_RIGHT);
 		map_button(SDL_CONTROLLER_BUTTON_GUIDE, DC_DPAD2_UP); // service
-		map_button(SDL_CONTROLLER_BUTTON_BACK, EMU_BTN_MENU);
+		if constexpr (Arcade)
+		{
+			// Game Vault: on Xbox the Guide button belongs to the console and the arcade Test button had none, so a
+			// NAOMI game that opened its System Menu could not be left. View inserts a coin, L3 is Test, R3 opens
+			// Flycast's menu.
+			map_button(SDL_CONTROLLER_BUTTON_BACK, DC_BTN_D);
+			map_button(SDL_CONTROLLER_BUTTON_LEFTSTICK, DC_DPAD2_DOWN);
+			map_button(SDL_CONTROLLER_BUTTON_RIGHTSTICK, EMU_BTN_MENU);
+		}
+		else
+			map_button(SDL_CONTROLLER_BUTTON_BACK, EMU_BTN_MENU);
 
 		map_axis(SDL_CONTROLLER_AXIS_LEFTX, DC_AXIS_LEFT, false);
 		map_axis(SDL_CONTROLLER_AXIS_LEFTX, DC_AXIS_RIGHT, true);

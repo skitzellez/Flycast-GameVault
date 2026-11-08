@@ -16,6 +16,8 @@
     You should have received a copy of the GNU General Public License
     along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include "cfg/cfg.h"
+#include "gv_prof.h"
 #include "dx11_naomi2.h"
 
 const char * const DX11N2VertexShader = R"(
@@ -417,7 +419,7 @@ void  Naomi2Helper::init(ComPtr<ID3D11Device>& device, ComPtr<ID3D11DeviceContex
 
 void Naomi2Helper::setConstants(const PolyParam& pp, u32 polyNumber, const rend_context& ctx)
 {
-	N2PolyConstants polyConstants;
+	N2PolyConstants polyConstants{};
 	memcpy(polyConstants.mvMat, ctx.matrices[pp.mvMatrix].mat, sizeof(polyConstants.mvMat));
 	memcpy(polyConstants.normalMat, ctx.matrices[pp.normalMatrix].mat, sizeof(polyConstants.normalMat));
 	memcpy(polyConstants.projMat, ctx.matrices[pp.projMatrix].mat, sizeof(polyConstants.projMat));
@@ -430,7 +432,16 @@ void Naomi2Helper::setConstants(const PolyParam& pp, u32 polyNumber, const rend_
 		polyConstants.glossCoef[i] = pp.glossCoef[i];
 		polyConstants.constantColor[i] = pp.constantColor[i];
 	}
-	setConstBuffer(polyConstantsBuffer, polyConstants);
+	gvprof::n2Calls++;
+	// test switch (emu.cfg [gv] SkipN2Uploads = yes)
+	static const bool skipTest = config::loadBool("gv", "SkipN2Uploads", false);
+	if (skipTest && lastPolyValid)
+		;
+	else if (changed(polyConstants))
+	{
+		gvprof::n2Uploads++;
+		setConstBuffer(polyConstantsBuffer, polyConstants);
+	}
 	deviceContext->VSSetConstantBuffers(1, 1, &polyConstantsBuffer.get());
 
 	if (pp.lightModel != lastModel)
@@ -443,9 +454,10 @@ void Naomi2Helper::setConstants(const PolyParam& pp, u32 polyNumber, const rend_
 
 void Naomi2Helper::setConstants(const float *mvMatrix, const float *projMatrix)
 {
-	N2PolyConstants polyConstants;
+	N2PolyConstants polyConstants{};
 	memcpy(polyConstants.mvMat, mvMatrix, sizeof(polyConstants.mvMat));
 	memcpy(polyConstants.projMat, projMatrix, sizeof(polyConstants.projMat));
-	setConstBuffer(polyConstantsBuffer, polyConstants);
+	if (changed(polyConstants))
+		setConstBuffer(polyConstantsBuffer, polyConstants);
 	deviceContext->VSSetConstantBuffers(1, 1, &polyConstantsBuffer.get());
 }

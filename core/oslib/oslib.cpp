@@ -192,6 +192,24 @@ std::string findNaomiBios(const std::string& name)
 		} catch (const hostfs::StorageException& e) {
 		}
 	}
+	// Game Vault: where players keep it - next to the game, or in the games drive's Game Vault bios folder
+	// (Game Vault's own BIOS folder). This app's data folder cannot be reached from the console.
+	if (!settings.content.path.empty())
+	{
+		try {
+			fullpath = hostfs::storage().getSubPath(hostfs::storage().getParentPath(settings.content.path), name);
+			if (hostfs::storage().exists(fullpath))
+				return fullpath;
+		} catch (const hostfs::StorageException& e) {
+		}
+		const std::string& game = settings.content.path;
+		if (game.size() > 3 && game[1] == ':' && (game[2] == '\\' || game[2] == '/'))
+		{
+			fullpath = game.substr(0, 3) + "Game Vault\\bios\\" + name;
+			if (hostfs::storage().exists(fullpath))
+				return fullpath;
+		}
+	}
 	return "";
 }
 

@@ -1,4 +1,5 @@
 #include "Renderer_if.h"
+#include "gv_prof.h"
 #include "spg.h"
 #include "rend/texconv.h"
 #include "rend/transform_matrix.h"
@@ -106,6 +107,7 @@ public:
 				{
 					if (type == Stop)
 						return;
+					gvprof::Scope gvp(gvprof::EmuWaitQueue);
 					dequeueEvent.Wait();
 				}
 			} while (dupe);
@@ -213,6 +215,7 @@ private:
 		{
 			FC_PROFILE_SCOPE_NAMED("Renderer::Process");
 			try {
+				gvprof::Scope gvp(gvprof::RendProcess);
 				renderer->Process(taContext);
 			} catch (...) {
 				renderEnd.Set();
@@ -229,6 +232,7 @@ private:
 		{
 			FC_PROFILE_SCOPE_NAMED("Renderer::Render");
 			try {
+				gvprof::Scope gvp(gvprof::RendRender);
 				renderer->Render();
 			} catch (...) {
 				if (!renderToScreen)
@@ -263,8 +267,14 @@ private:
 	{
 		FC_PROFILE_SCOPE;
 
-		if (renderer->Present())
+		bool shown;
 		{
+			gvprof::Scope gvp(gvprof::RendPresent);
+			shown = renderer->Present();
+		}
+		if (shown)
+		{
+			gvprof::frame();
 			presented = true;
 			if (!config::ThreadedRendering && !ggpo::active())
 				emu.getSh4Executor()->Stop();
@@ -590,7 +600,10 @@ int rend_end_render(int tag, int cycles, int jitter, void *arg)
 		asic_RaiseInterrupt(holly_RENDER_DONE_vd);
 	}
 	if (pend_rend && config::ThreadedRendering)
+	{
+		gvprof::Scope gvp(gvprof::EmuWaitRender);
 		renderEnd.Wait();
+	}
 
 	return 0;
 }

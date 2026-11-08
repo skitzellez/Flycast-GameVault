@@ -634,6 +634,9 @@ void naomi_cart_LoadRom(const std::string& path, const std::string& fileName, Lo
 		loadDecryptedRom(path, fileName, progress);
 
 	atomiswaveForceFeedback = false;
+	// Game Vault: NAOMI 2 games use per-strip sorting
+	if (settings.platform.isNaomi2() && !config::PerStripSorting)
+		config::PerStripSorting.override(true);
 	RomBootID bootId;
 	if (CurrentCartridge->GetBootId(&bootId)
 			&& (!memcmp(bootId.boardName, "NAOMI", 5)
