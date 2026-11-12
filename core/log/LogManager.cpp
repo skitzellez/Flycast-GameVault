@@ -146,13 +146,21 @@ LogManager::LogManager()
 void LogManager::UpdateConfig()
 {
 	bool logToFile = config::loadBool("log", "LogToFile", false);
+#ifdef TARGET_UWP
+	// Game Vault: always on once the shared log file is known (winmain.cpp setupPath)
+	const char *gvLog = nowide::getenv("FLYCAST_GV_LOG");
+	if (gvLog != nullptr && gvLog[0] != 0)
+		logToFile = true;
+#endif
 	if (logToFile != IsListenerEnabled(LogListener::FILE_LISTENER))
 	{
 		if (!logToFile) {
 			m_listeners[LogListener::FILE_LISTENER].reset();
 		}
 		else {
-#if defined(__ANDROID__) || defined(__APPLE__) || defined(TARGET_UWP)
+#if defined(TARGET_UWP)
+			std::string logPath = gvLog != nullptr && gvLog[0] != 0 ? std::string(gvLog) : get_writable_data_path("flycast.log");
+#elif defined(__ANDROID__) || defined(__APPLE__)
 			std::string logPath = get_writable_data_path("flycast.log");
 #else
 			std::string logPath = "flycast.log";

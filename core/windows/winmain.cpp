@@ -89,6 +89,21 @@ static void setupPath()
 	flycast::mkdir(homePath.c_str(), 0755);
 	SetEnvironmentVariable(L"HOMEPATH", localFolder->Path->Data());
 	SetEnvironmentVariable(L"HOMEDRIVE", nullptr);
+	// Game Vault: this session's log goes where Game Vault collects the emulators' logs for a problem report
+	// (the folder it shares with them), so a game that closes at once says why. Reports of 2026-11-11 had 100+
+	// such starts on 4 consoles and no Flycast log at all.
+	try {
+		StorageFolder^ shared = Windows::Storage::ApplicationData::Current->GetPublisherCacheFolder(L"games");
+		if (shared != nullptr) {
+			std::wstring dir = std::wstring(shared->Path->Data()) + L"\\logs";
+			CreateDirectoryW(dir.c_str(), nullptr);
+			std::wstring file = dir + L"\\Flycast (NAOMI, Dreamcast).log";
+			DeleteFileW(file.c_str());	// one session each
+			SetEnvironmentVariable(L"FLYCAST_GV_LOG", file.c_str());
+			LogManager::GetInstance()->UpdateConfig();
+		}
+	} catch (...) {
+	}
 #endif
 }
 

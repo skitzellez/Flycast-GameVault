@@ -51,4 +51,12 @@
 		<uap:Capability Name="removableStorage" />
 		<DeviceCapability Name="microphone"/>
 	</Capabilities>
+	<!-- Game Vault: the folder shared with Game Vault, for this session's log (problem reports) -->
+	<Extensions>
+		<Extension Category="windows.publisherCacheFolders">
+			<PublisherCacheFolders>
+				<Folder Name="games" />
+			</PublisherCacheFolders>
+		</Extension>
+	</Extensions>
 </Package>
