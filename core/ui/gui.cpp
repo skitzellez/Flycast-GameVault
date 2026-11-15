@@ -72,6 +72,7 @@ static bool inited = false;
 GuiState gui_state = GuiState::Main;
 static bool commandLineStart;
 std::string launchOnExitUri;
+bool gv_link_fsr = false;   // Game Vault: fsr=1 in the start link (Sharper picture)
 static u32 mouseButtons;
 static int mouseX, mouseY;
 static float mouseWheel;
@@ -1218,6 +1219,11 @@ static bool checkUWPProtocolActivation()
 			INFO_LOG(BOOT, "LaunchOnExit URI: %s", launchOnExitUri.c_str());
 			// SDL WinRT will automatically handle launchOnExit from the protocol URI
 		}
+
+		// Game Vault's "Sharper picture (FSR)": FSR 1 on the last draw to the screen (dx11_renderer.cpp)
+		gv_link_fsr = uri.find("&fsr=1") != std::string::npos;
+		if (gv_link_fsr)
+			INFO_LOG(BOOT, "Game Vault: Sharper picture (FSR) on");
 
 		uri = http::urlDecode(uri);
 

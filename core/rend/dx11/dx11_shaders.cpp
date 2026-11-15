@@ -432,6 +432,100 @@ float4 main(in VertexIn vin) : SV_Target
 
 )";
 
+// Game Vault's "Sharper picture (FSR)": AMD FidelityFX Super Resolution 1 EASU in one pass, for the last draw to the
+// screen. Ported from libretro/slang-shaders fsr-pass0.slang (Unlicense), the EASU filter of AMD's ffx_fsr1.h
+// (Copyright (c) 2021 Advanced Micro Devices, Inc., MIT licence; see the notice in Game Vault's README).
+const char * const QuadFsrPixelShader = R"(
+struct VertexIn
+{
+	float4 pos : SV_POSITION;
+	float2 uv : TEXCOORD0;
+};
+
+Texture2D texture0;
+
+float3 tap(int2 sp, int2 off, int2 size)
+{
+	return texture0.Load(int3(clamp(sp + off, int2(0, 0), size - 1), 0)).rgb;
+}
+
+float luma(float3 c) { return c.b * 0.5 + (c.r * 0.5 + c.g); }
+
+void quadrant(float w, float lc, float ll, float lr, float lu, float ld, inout float2 dir, inout float len)
+{
+	float lenX = 1.0 / max(max(abs(lr - lc), abs(lc - ll)), 1.0e-6);
+	float dirX = lr - ll;
+	dir.x += dirX * w;
+	lenX = saturate(abs(dirX) * lenX);
+	len += lenX * lenX * w;
+	float lenY = 1.0 / max(max(abs(ld - lc), abs(lc - lu)), 1.0e-6);
+	float dirY = ld - lu;
+	dir.y += dirY * w;
+	lenY = saturate(abs(dirY) * lenY);
+	len += lenY * lenY * w;
+}
+
+float4 main(in VertexIn vin) : SV_Target
+{
+	uint tw, th;
+	texture0.GetDimensions(tw, th);
+	int2 size = int2(tw, th);
+	float2 pp = vin.uv * float2(tw, th) - 0.5;
+	float2 fp = floor(pp);
+	pp -= fp;
+	int2 sp = int2(fp);
+
+	float3 b = tap(sp, int2(0, -1), size), c = tap(sp, int2(1, -1), size);
+	float3 e = tap(sp, int2(-1, 0), size), f = tap(sp, int2(0, 0), size), g = tap(sp, int2(1, 0), size), h = tap(sp, int2(2, 0), size);
+	float3 i = tap(sp, int2(-1, 1), size), j = tap(sp, int2(0, 1), size), k = tap(sp, int2(1, 1), size), l = tap(sp, int2(2, 1), size);
+	float3 n = tap(sp, int2(0, 2), size), o = tap(sp, int2(1, 2), size);
+	float bL = luma(b), cL = luma(c), eL = luma(e), fL = luma(f), gL = luma(g), hL = luma(h);
+	float iL = luma(i), jL = luma(j), kL = luma(k), lL = luma(l), nL = luma(n), oL = luma(o);
+
+	float2 dir = float2(0.0, 0.0);
+	float len = 0.0;
+	quadrant((1.0 - pp.x) * (1.0 - pp.y), fL, eL, gL, bL, jL, dir, len);
+	quadrant(pp.x * (1.0 - pp.y), gL, fL, hL, cL, kL, dir, len);
+	quadrant((1.0 - pp.x) * pp.y, jL, iL, kL, fL, nL, dir, len);
+	quadrant(pp.x * pp.y, kL, jL, lL, gL, oL, dir, len);
+
+	float dirR = dir.x * dir.x + dir.y * dir.y;
+	bool zro = dirR < (1.0 / 32768.0);
+	dirR = zro ? 1.0 : rsqrt(dirR);
+	dir.x = zro ? 1.0 : dir.x;
+	dir *= dirR;
+	len = len * 0.5;
+	len *= len;
+	float stretch = (dir.x * dir.x + dir.y * dir.y) / max(abs(dir.x), abs(dir.y));
+	float2 len2 = float2(1.0 + (stretch - 1.0) * len, 1.0 - 0.5 * len);
+	float lob = 0.5 + ((1.0 / 4.0 - 0.04) - 0.5) * len;
+	float clp = 1.0 / lob;
+
+	float3 min4 = min(min(f, g), min(j, k));
+	float3 max4 = max(max(f, g), max(j, k));
+	float2 offs[12] = { float2(0, -1), float2(1, -1), float2(-1, 1), float2(0, 1), float2(0, 0), float2(-1, 0),
+	                    float2(1, 1), float2(2, 1), float2(2, 0), float2(1, 0), float2(1, 2), float2(0, 2) };
+	float3 cols[12] = { b, c, i, j, f, e, k, l, h, g, o, n };
+	float3 aC = float3(0.0, 0.0, 0.0);
+	float aW = 0.0;
+	[unroll] for (int t = 0; t < 12; t++)
+	{
+		float2 d = offs[t] - pp;
+		float2 v = float2(d.x * dir.x + d.y * dir.y, d.x * (-dir.y) + d.y * dir.x) * len2;
+		float d2 = min(v.x * v.x + v.y * v.y, clp);
+		float wB = (2.0 / 5.0) * d2 - 1.0;
+		float wA = lob * d2 - 1.0;
+		wB *= wB;
+		wA *= wA;
+		wB = (25.0 / 16.0) * wB - (25.0 / 16.0 - 1.0);
+		float w = wB * wA;
+		aC += cols[t] * w;
+		aW += w;
+	}
+	return float4(min(max4, max(min4, aC / aW)), 1.0);
+}
+)";
+
 struct IncludeManager : public ID3DInclude
 {
 	HRESULT STDMETHODCALLTYPE Open(D3D_INCLUDE_TYPE IncludeType, LPCSTR pFileName, LPCVOID pParentData, LPCVOID *ppData, UINT *pBytes) override
@@ -630,6 +724,13 @@ const ComPtr<ID3D11VertexShader>& DX11Shaders::getQuadVertexShader(bool rotate)
 	}
 
 	return shader;
+}
+
+const ComPtr<ID3D11PixelShader>& DX11Shaders::getQuadFsrPixelShader()
+{
+	if (!quadFsrPixelShader)
+		quadFsrPixelShader = compilePS(QuadFsrPixelShader, "main", nullptr);
+	return quadFsrPixelShader;
 }
 
 const ComPtr<ID3D11PixelShader>& DX11Shaders::getQuadPixelShader()

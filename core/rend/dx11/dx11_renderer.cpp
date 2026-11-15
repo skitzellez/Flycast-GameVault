@@ -583,7 +583,13 @@ void DX11Renderer::displayFramebuffer()
 	x += shiftX;
 	y += shiftY;
 	deviceContext->OMSetBlendState(blendStates.getState(false), nullptr, 0xffffffff);
-	quad->draw(fbTextureView, samplers->getSampler(config::LinearInterpolation), nullptr, x, y, w, h, config::Rotate90);
+	{
+		// Game Vault's "Sharper picture (FSR)" (fsr=1 in its link, core/ui/gui.cpp)
+		extern bool gv_link_fsr;
+		quad->fsr = gv_link_fsr;
+		quad->draw(fbTextureView, samplers->getSampler(config::LinearInterpolation), nullptr, x, y, w, h, config::Rotate90);
+		quad->fsr = false;
+	}
 #endif
 }
 

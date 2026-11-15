@@ -57,6 +57,7 @@ public:
 	const ComPtr<ID3D11PixelShader>& getModVolShader();
 	const ComPtr<ID3D11VertexShader>& getMVVertexShader(bool naomi2);
 	const ComPtr<ID3D11PixelShader>& getQuadPixelShader();
+	const ComPtr<ID3D11PixelShader>& getQuadFsrPixelShader();   // Game Vault: Sharper picture (FSR)
 	const ComPtr<ID3D11VertexShader>& getQuadVertexShader(bool rotate);
 
 	ComPtr<ID3DBlob> getVertexShaderBlob();
@@ -74,6 +75,7 @@ private:
 	ComPtr<ID3D11PixelShader> modVolShader;
 	ComPtr<ID3D11VertexShader> modVolVertexShaders[4];
 	ComPtr<ID3D11PixelShader> quadPixelShader;
+	ComPtr<ID3D11PixelShader> quadFsrPixelShader;
 	ComPtr<ID3D11VertexShader> quadVertexShader;
 	ComPtr<ID3D11VertexShader> quadRotateVertexShader;
 	pD3DCompile D3DCompile = nullptr;

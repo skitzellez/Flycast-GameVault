@@ -23,6 +23,8 @@
 class Quad
 {
 public:
+	bool fsr = false;   // Game Vault's "Sharper picture (FSR)": the next draw uses the FSR 1 pixel shader
+
 	void init(const ComPtr<ID3D11Device>& device, ComPtr<ID3D11DeviceContext> deviceContext, DX11Shaders *shaders)
 	{
 		this->device = device;
@@ -108,7 +110,15 @@ public:
 		deviceContext->RSSetState(rasterizerState);
 		deviceContext->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 		deviceContext->VSSetShader(rotate ? rotateVertexShader : vertexShader, nullptr, 0);
-		deviceContext->PSSetShader(pixelShader, nullptr, 0);
+		// Game Vault: FSR 1 for the last draw to the screen (fsr set by DX11Renderer::displayFramebuffer)
+		ID3D11PixelShader* ps = pixelShader;
+		if (fsr)
+		{
+			const ComPtr<ID3D11PixelShader>& fsrShader = shaders->getQuadFsrPixelShader();
+			if (fsrShader)
+				ps = fsrShader;
+		}
+		deviceContext->PSSetShader(ps, nullptr, 0);
 		deviceContext->GSSetShader(nullptr, nullptr, 0);
 		deviceContext->HSSetShader(nullptr, nullptr, 0);
 		deviceContext->DSSetShader(nullptr, nullptr, 0);
