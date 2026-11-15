@@ -72,6 +72,7 @@ static bool inited = false;
 GuiState gui_state = GuiState::Main;
 static bool commandLineStart;
 std::string launchOnExitUri;
+int gv_link_fsr_pct = 0;   // Game Vault: fsrs=<percent> with it, the strength
 bool gv_link_fsr = false;   // Game Vault: fsr=1 in the start link (Sharper picture)
 static u32 mouseButtons;
 static int mouseX, mouseY;
@@ -1222,6 +1223,10 @@ static bool checkUWPProtocolActivation()
 
 		// Game Vault's "Sharper picture (FSR)": FSR 1 on the last draw to the screen (dx11_renderer.cpp)
 		gv_link_fsr = uri.find("&fsr=1") != std::string::npos;
+		{
+			const size_t at = uri.find("&fsrs=");
+			gv_link_fsr_pct = at == std::string::npos ? 0 : atoi(uri.c_str() + at + 6);
+		}
 		if (gv_link_fsr)
 			INFO_LOG(BOOT, "Game Vault: Sharper picture (FSR) on");
 

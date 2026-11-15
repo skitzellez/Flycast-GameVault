@@ -522,7 +522,12 @@ float4 main(in VertexIn vin) : SV_Target
 		aC += cols[t] * w;
 		aW += w;
 	}
-	return float4(min(max4, max(min4, aC / aW)), 1.0);
+	float3 pix = min(max4, max(min4, aC / aW));
+	// Game Vault's FSR strength (GV_SHARP 0..1, set at compile time): push away from the plain bilinear blend of
+	// the four nearest pixels, kept inside their range so edges get no halo (the limit AMD's CAS/RCAS uses)
+	float3 bil = lerp(lerp(f, g, pp.x), lerp(j, k, pp.x), pp.y);
+	pix = min(max4, max(min4, pix + 2.0 * GV_SHARP * (pix - bil)));
+	return float4(pix, 1.0);
 }
 )";
 
@@ -728,8 +733,18 @@ const ComPtr<ID3D11VertexShader>& DX11Shaders::getQuadVertexShader(bool rotate)
 
 const ComPtr<ID3D11PixelShader>& DX11Shaders::getQuadFsrPixelShader()
 {
-	if (!quadFsrPixelShader)
-		quadFsrPixelShader = compilePS(QuadFsrPixelShader, "main", nullptr);
+	// the strength from Game Vault's link (fsrs=<percent>, core/ui/gui.cpp): 0.1..1.0, 0.5 when not sent; a new
+	// strength in a later link builds the shader again
+	extern int gv_link_fsr_pct;
+	static int builtPct = -1;
+	if (!quadFsrPixelShader || builtPct != gv_link_fsr_pct)
+	{
+		builtPct = gv_link_fsr_pct;
+		static char sharp[16];
+		snprintf(sharp, sizeof(sharp), "%.2f", gv_link_fsr_pct > 0 && gv_link_fsr_pct <= 100 ? gv_link_fsr_pct / 100.0 : 0.5);
+		const D3D_SHADER_MACRO defines[] = { { "GV_SHARP", sharp }, { nullptr, nullptr } };
+		quadFsrPixelShader = compilePS(QuadFsrPixelShader, "main", defines);
+	}
 	return quadFsrPixelShader;
 }
 
